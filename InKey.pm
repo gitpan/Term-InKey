@@ -6,9 +6,9 @@ require Exporter;
 use strict qw(vars);
 use vars qw(@ISA @EXPORT $VERSION);
 @ISA = qw(Exporter);
-@EXPORT = qw(ReadKey Clear);
+@EXPORT = qw(ReadKey Clear ReadPassword);
 
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 sub WinReadKey {
 	my $y;
@@ -171,6 +171,48 @@ sub Clear {
 	select $desc;
 }
 
+sub ReadPassword {
+	my ($opt) = @_;
+	my $bullet = "*";
+	my ($bs, $ws, $nl) = ("\b", " ", "\n");
+	($bs, $ws, $nl, $bullet) = () if ($opt < 0);
+	$bullet = $opt if length($opt) == 1;
+	my $save = $|;
+	$| = 1;
+	my $pass = '';
+	for (;;) {
+		my $ch = &ReadKey;
+		if ($ch eq "\3") {
+			$pass = "";
+			$ch = "\n";
+		}
+		if ($ch =~ /[\r\n]/) {
+			$| = $save;
+			print $nl;
+			return $pass;
+		}
+		if ($ch =~ /[\b\x7F]/) {
+			next unless $pass;
+			chop $pass;
+			print "$bs$ws$bs";
+			next;
+		}
+		if ($ch eq "\025") {
+			my $len = length($pass);
+			print ($bs x $len) . ($ws x $len) . 
+				($bs x $len);
+			$pass = '';
+		}
+		if (ord($ch) < 32) {
+			print "\7";
+			next;
+		}
+		$pass .= $ch;
+		print $bullet;
+	}
+}
+
+
 1;
 __END__
 
@@ -193,6 +235,35 @@ This module implements Clear() to clear screen and ReadKey() to receive
 a keystroke, on UNIX and Win32 platforms. As opposed to B<Term::ReadKey>,
 it does not contain XSUB code and can be easily installed on Windows boxes.
 
+=head1 FUNCTIONS
+
+=over 4
+
+=item *
+
+Clear
+
+Clear the screen.
+
+=item *
+
+ReadKey
+
+Read one keystroke.
+
+=item *
+
+ReadPassword
+
+Read a password, displaying asteriks instead of the characters readed.
+Deleting one character back (DEL) and erasing the buffer (^U) are
+supported.
+This function accepts one argument. It can be an alternate char
+for displaying other than an asterik, or if a negative number,
+surpresses output to the screen and only receives input.
+
+=back
+
 =head1 TODO
 
 Write a function to receive a keystroke with time out. Easy with select()
@@ -212,6 +283,6 @@ This module is free and is distributed under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-L<stty>, L<tcsetattr>, L<termcap>, L<Term::Cap>, L<POSIX>, L<Term::ReadKey>.
+L<stty>, L<tcsetattr>, L<termcap>, L<Term::Cap>, L<POSIX>, L<Term::ReadKey>, L<Term::ReadPassword>.
 
 =cut
