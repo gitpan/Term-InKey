@@ -6,7 +6,7 @@ use vars qw(@ISA @EXPORT $VERSION);
 @ISA = qw(Exporter);
 @EXPORT = qw(ReadKey Clear);
 
-$VERSION = 1.00;
+$VERSION = '1.00';
 
 sub WinReadKey {
 	my $y;
