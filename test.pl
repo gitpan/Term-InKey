@@ -6,11 +6,48 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..1\n"; }
+BEGIN { $| = 1; print "1..4\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Term::InKey;
 $loaded = 1;
 print "ok 1\n";
+
+my $x,$y;
+if ($^O !~ /Win32/i) 
+	{
+	local *STDIN;
+	open STDIN, $0;
+	$x = &ReadKey;
+	$y = &ReadPassword($x);
+	} 
+	else 
+	{ #No tests for Win32
+	$x = '#';
+	$y = ' Before ';
+	}
+
+if ($x eq '#') {
+	print "ok 2\n";
+	}
+	else
+	{
+	print "not ok 2\n";
+	}
+
+if ($y =~ /Before/) {
+	print "ok 3\n";
+	}
+	else
+	{
+	print "not ok 3\n";
+	}
+
+{
+local *STDOUT;
+open STDOUT, "> /dev/null";
+&Clear;
+}
+print "ok 4\n";
 
 ######################### End of black magic.
 

@@ -4,31 +4,34 @@ package Term::InKey;
 # Now manitained by Oded S. Resnik Raz Information Systems
 
 require Exporter;
-use strict qw(vars);
-use vars qw(@ISA @EXPORT $VERSION $WIN32CONSOLE);
+use strict qw(vars subs);
+use vars qw(@ISA @EXPORT $VERSION $WIN32CONSOLE $BAD_CLS $BAD_RKEY $TER_CLS);
 @ISA = qw(Exporter);
 @EXPORT = qw(ReadKey Clear ReadPassword);
 
-$VERSION = '1.03';
+$VERSION = '1.04';
+
+sub WinSetConsole {
+	return $WIN32CONSOLE if $WIN32CONSOLE;
+	require Win32::Console;
+	import Win32::Console;
+	{
+		local *STDERR;
+		open STDERR, ">/dev/null";
+		$WIN32CONSOLE = Win32::Console->
+		new(Win32::Console->STD_INPUT_HANDLE);
+	}
+	return $WIN32CONSOLE;
+}
 
 sub WinReadKey {
 my $y;
 eval {
-   	no warnings;
-	unless ($WIN32CONSOLE)
+	if(&WinSetConsole)
 		{
-			require Win32::Console;
-               		import Win32::Console;
-               		{
-               			local *STDERR;
-               			open STDERR, ">/dev/null";
-				$WIN32CONSOLE = Win32::Console->
-					new(Win32::Console->STD_INPUT_HANDLE);
-			}
-		}
 		my $mode = $WIN32CONSOLE->Mode || die $^E;
                 my $newmode = $mode;
-		$newmode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+		$newmode &= ~(&ENABLE_LINE_INPUT | &ENABLE_ECHO_INPUT);
     		$WIN32CONSOLE->Mode($newmode) || die $^E;
 		$WIN32CONSOLE->Flush || die $^E;
 
@@ -36,16 +39,20 @@ eval {
 		$WIN32CONSOLE->Flush || die $^E;
     		$WIN32CONSOLE->Mode($mode) || die $^E;
 		die $^E unless defined($y);
+		}
 	};
 	die "Not implemented on $^O: $@" if $@;
 $y;
 }
 
 sub BadReadKey {
+ if ($^O !~ /Win32/i) {
+	$BAD_RKEY =1;
 	system "stty raw -echo";
 	my $ch = getc;
 	system "stty -raw echo";
 	$ch;
+	}
 }
 
 sub ReadKey {
@@ -55,8 +62,10 @@ sub ReadKey {
 
 	my $save;
 
+	&BadReadKey if $BAD_RKEY;
+
 	eval {
-                require POSIX;
+                require POSIX; 
 		import POSIX;
 
 		$save = new POSIX::Termios;
@@ -75,13 +84,12 @@ sub ReadKey {
 
 	# +raw
 	{
-		no warnings;
-		$flags{'i'} &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
-                                   |INLCR|IGNCR|ICRNL|IXON);
-		$flags{'o'} &= ~OPOST;
-		$flags{'l'} &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
-		$flags{'c'} &= ~(CSIZE|PARENB);
-		$flags{'c'} |= CS8;
+		$flags{'i'} &= ~(&IGNBRK|&BRKINT|&PARMRK|&ISTRIP
+                                   |&INLCR|&IGNCR|&ICRNL|&IXON);
+		$flags{'o'} &= ~&OPOST;
+		$flags{'l'} &= ~(&ECHO|&ECHONL|&ICANON|&ISIG|&IEXTEN);
+		$flags{'c'} &= ~(&CSIZE|&PARENB);
+		$flags{'c'} |= &CS8;
 	}
 	&setit($x, \%flags);
 
@@ -111,25 +119,19 @@ sub setit {
 }
 
 sub WinClear {
+
+&BadClear if $BAD_CLS;
+
 eval {
-	unless ($WIN32CONSOLE)
-		{
-			no warnings;
-			require Win32::Console;
-			import Win32::Console;
-				{
-					local *STDERR;
-					open STDERR, ">/dev/null";
-					$WIN32CONSOLE =
-						Win32::Console->new(
-							Win32::Console->STD_INPUT_HANDLE)|| die $^E;
-				}
-			}
+	if(&WinSetConsole)
 		{
 		local *STDERR;
 		open STDERR, ">/dev/null";
 		$WIN32CONSOLE->Cls || die $^E;
 		$WIN32CONSOLE->Display;
+		}
+		else {
+			&BadClear;
 		};
 	};
 	&BadClear if $@;
@@ -137,6 +139,7 @@ eval {
 
 
 sub BadClear {
+	$BAD_CLS = 1;
 	if ($^O =~ /Win/i || $^O =~ /Dos/i) {
 		system "cls";
 		return;
@@ -146,15 +149,16 @@ sub BadClear {
 }
 
 sub Clear {
-	if ($^O =~ /Win32/i) {
+
+	&BadClear if $BAD_CLS;
+
+	if ($^O =~ /Win32/i || $^O =~ /Dos/i) {
 		&WinClear;
 		return;
 	}
 	
-	my $cls = undef if undef;
 
-	unless (defined($cls)) {
-		$cls = ''; # Avoid warnings
+	unless ($TER_CLS) {
 
 		my $speed = 9600;
 
@@ -172,11 +176,11 @@ sub Clear {
 			my $emu = $ENV{'TERM'} || 'vt100';
 		        my $term = Term::Cap->Tgetent({'TERM' => $emu,
 				'OSPEED' => $speed});
-		        $cls = $term->Tputs('cl');
+		        $TER_CLS = $term->Tputs('cl');
 		};
 	}
 
-	unless ($cls) {
+	unless ($TER_CLS) {
 		&BadClear;
 		return;
 	}
@@ -185,7 +189,7 @@ sub Clear {
 	select STDOUT;
 	my $pipe = $|;
 	$| = 1;
-	print $cls;
+	print $TER_CLS;
 
 	$| = $pipe;
 	select $desc;
@@ -195,12 +199,11 @@ sub ReadPassword {
 	my ($opt) = @_;
 	my $bullet = "*";
 	my ($bs, $ws, $nl) = ("\b", " ", "\n");
-	{
-		no warnings;
-		($bs, $ws, $nl, $bullet) 
-			= () if ($opt && $opt < 0);
+	if ($opt) {
+	$bullet = $opt if length($opt) == 1;
+  	($bs, $ws, $nl, $bullet)
+                        = () if ($opt =~ /-\d+/);
 	}
-	$bullet = $opt if $opt && length($opt) == 1;
 	my $save = $|;
 	$| = 1;
 	my $pass = '';
@@ -212,20 +215,22 @@ sub ReadPassword {
 		}
 		if ($ch =~ /[\r\n]/) {
 			$| = $save;
-			print $nl;
+			print $nl if $nl;
 			return $pass;
 		}
 		if ($ch =~ /[\b\x7F]/) {
 			next unless $pass;
 			chop $pass;
-			print "$bs$ws$bs";
+			print "$bs$ws$bs" if $bs;
 			next;
 		}
 		if ($ch eq "\025") {
 			my $len = length($pass);
-			my $res =  ($bs x $len) . ($ws x $len) . 
-				($bs x $len);
-			print "$res";
+			if ($ws) {
+				my $res =  ($bs x $len) . ($ws x $len) . 
+					($bs x $len);
+				print "$res";
+			}
 			$pass = '';
 		}
 		if (ord($ch) < 32) {
@@ -233,7 +238,7 @@ sub ReadPassword {
 			next;
 		}
 		$pass .= $ch;
-		print $bullet;
+		print $bullet if $bullet;
 	}
 }
 

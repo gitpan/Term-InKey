@@ -7,3 +7,9 @@ Revision history for Perl extension Term::InKey.
 	- fixed some bugs on Win32 (Thanks to request from Koepke Christian)
 	  tested on win98 perl v5.8.0.
 	- fixed some warnings on non Win32 platforms (Tested on Linux)
+1.04  Sat Dec 11 13:35:21 2004
+	- Code optimization
+	- Better test
+	- $Term::Inkey::BAD_RKEY and $Term::Inkey::BAD_CLS
+	  that can be used to force readkey and cls to a
+          vary basic form. (trying to help Dave Peak)
