@@ -1,12 +1,14 @@
 package Term::InKey;
 
+# Ariel Brosh, November 2001, for Raz Information Systems
+
 require Exporter;
 use strict qw(vars);
 use vars qw(@ISA @EXPORT $VERSION);
 @ISA = qw(Exporter);
 @EXPORT = qw(ReadKey Clear);
 
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 sub WinReadKey {
 	my $y;
